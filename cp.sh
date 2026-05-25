@@ -16,6 +16,7 @@ echo -e "${C_MAGENTA}           WakkoDev Setup         ${C_RESET}"
 echo -e "${C_CYAN}====================================================${C_RESET}"
 echo ""
 
+# --- Validación de Sistema Operativo ---
 source /etc/os-release
 if [[ "$ID" != "ubuntu" || "$VERSION_ID" != 20.* ]]; then
     echo -e "${C_RED}[!] ERROR: Este script solo es compatible con Ubuntu 20.x${C_RESET}"
@@ -26,11 +27,13 @@ fi
 
 echo -e "${C_GREEN}[✔] Sistema verificado: $PRETTY_NAME${C_RESET}\n"
 
+# --- Petición de contraseña ---
 echo -e "${C_YELLOW}[!] Vamos a configurar la autenticación PAM.${C_RESET}"
 echo -e -n "${C_GREEN}🔑 Ingresa la Contraseña para el script: ${C_RESET}"
 read PASSWORD
 echo ""
 
+# --- Paso 1: Crear el script de verificación ---
 echo -e "${C_CYAN}[*] Generando archivo /usr/local/bin/verify_local.sh...${C_RESET}"
 
 cat <<EOF >/usr/local/bin/verify_local.sh
@@ -76,8 +79,23 @@ EOF
 
 chmod 700 /usr/local/bin/verify_local.sh
 chown root:root /usr/local/bin/verify_local.sh
-echo -e "${C_GREEN}✅ Script instalado con éxito en /usr/local/bin/verify_local.sh${C_RESET}\n"
+echo -e "${C_GREEN}✅ Script de verificación creado e instalado.${C_RESET}\n"
 
+# --- Paso 2: Editar archivo PAM y Reiniciar SSH ---
+echo -e "${C_CYAN}[*] Configurando PAM en /etc/pam.d/sshd...${C_RESET}"
+# Respaldar por seguridad
+cp /etc/pam.d/sshd /etc/pam.d/sshd.bak
+# Insertar la regla de autenticación en la línea 1 del archivo
+sed -i '1i auth required pam_exec.so expose_authtok /usr/local/bin/verify_local.sh' /etc/pam.d/sshd
+echo -e "${C_GREEN}✅ Archivo PAM modificado correctamente.${C_RESET}"
+
+echo -e "${C_CYAN}[*] Reiniciando el servicio SSH...${C_RESET}"
+systemctl restart ssh
+echo -e "${C_GREEN}✅ Servicio SSH reiniciado.${C_RESET}\n"
+
+# ==========================================
+# Ejecución del segundo script (SSHPLUS)
+# ==========================================
 echo -e "${C_CYAN}====================================================${C_RESET}"
 echo -e "${C_YELLOW}🚀 Iniciando instalación de dependencias y SSHPLUS...${C_RESET}"
 echo -e "${C_CYAN}====================================================${C_RESET}"
