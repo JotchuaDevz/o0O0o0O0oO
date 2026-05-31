@@ -16,12 +16,10 @@ echo -e "${C_MAGENTA}           DevzZJT Setup         ${C_RESET}"
 echo -e "${C_CYAN}====================================================${C_RESET}"
 echo ""
 
-# --- Validación de Sistema Operativo ---
 source /etc/os-release
 UBUNTU_VERSION=$(echo "$VERSION_ID" | cut -d. -f1)
 
-# Aceptar Ubuntu 20, 22, 24 y superiores
-if [[ "$ID" != "ubuntu" || ! "$UBUNTU_VERSION" =~ ^(20|22|24|26|28|30)$ ]]; then
+if [[ "$ID" != "ubuntu" || "$UBUNTU_VERSION" -lt 20 ]]; then
     echo -e "${C_RED}[!] ERROR: Este script solo es compatible con Ubuntu 20 LTS o superior${C_RESET}"
     echo -e "${C_RED}[!] Tu sistema actual es: $PRETTY_NAME${C_RESET}"
     echo -e "${C_YELLOW}Instalación cancelada.${C_RESET}"
@@ -30,13 +28,11 @@ fi
 
 echo -e "${C_GREEN}[✔] Sistema verificado: $PRETTY_NAME${C_RESET}\n"
 
-# --- Petición de contraseña ---
 echo -e "${C_YELLOW}[!] Vamos a configurar la autenticación PAM.${C_RESET}"
 echo -e -n "${C_GREEN}🔑 Ingresa la Contraseña para el script: ${C_RESET}"
 read PASSWORD
 echo ""
 
-# --- Paso 1: Crear el script de verificación ---
 echo -e "${C_CYAN}[*] Generando archivo /usr/local/bin/verify_local.sh...${C_RESET}"
 
 cat <<EOF >/usr/local/bin/verify_local.sh
@@ -84,37 +80,57 @@ chmod 700 /usr/local/bin/verify_local.sh
 chown root:root /usr/local/bin/verify_local.sh
 echo -e "${C_GREEN}✅ Script de verificación creado e instalado.${C_RESET}\n"
 
-# --- Paso 2: Editar archivo PAM y Reiniciar SSH ---
 echo -e "${C_CYAN}[*] Configurando PAM en /etc/pam.d/sshd...${C_RESET}"
-# Respaldar por seguridad
 cp /etc/pam.d/sshd /etc/pam.d/sshd.bak
-# Insertar la regla de autenticación en la línea 1 del archivo
 sed -i '1i auth required pam_exec.so expose_authtok /usr/local/bin/verify_local.sh' /etc/pam.d/sshd
 echo -e "${C_GREEN}✅ Archivo PAM modificado correctamente.${C_RESET}"
 
 echo -e "${C_CYAN}[*] Reiniciando el servicio SSH...${C_RESET}"
-systemctl restart ssh
+systemctl restart ssh 2>/dev/null || systemctl restart sshd
 echo -e "${C_GREEN}✅ Servicio SSH reiniciado.${C_RESET}\n"
 
-# ==========================================
-# Pregunta sobre instalación de SSHPLUS
-# ==========================================
 echo -e "${C_CYAN}====================================================${C_RESET}"
 echo -e "${C_GREEN}✅ Configuración de PAM completada exitosamente.${C_RESET}"
 echo -e "${C_CYAN}====================================================${C_RESET}\n"
 
+# ==========================================
+# Pregunta sobre instalación de UDP
+# ==========================================
+echo -e "${C_YELLOW}[!] Es RECOMENDABLE instalar el script UDP para mayor funcionalidad.${C_RESET}"
+echo -e -n "${C_MAGENTA}¿Deseas instalar el script UDP ahora? (Y/y/Si/si/N/n/No/no): ${C_RESET}"
+read -r RESPONSE_UDP
+
+case "$RESPONSE_UDP" in
+    Y|y|Si|si|SI|Sí)
+        echo -e "${C_CYAN}====================================================${C_RESET}"
+        echo -e "${C_YELLOW}🚀 Iniciando instalación del script UDP...${C_RESET}"
+        echo -e "${C_CYAN}====================================================${C_RESET}"
+        sleep 1
+        curl -sL https://raw.githubusercontent.com/hahacrunchyrollls/TFN-UDP/refs/heads/main/install | bash
+        echo -e "${C_GREEN}✅ Script UDP instalado.${C_RESET}\n"
+        ;;
+    N|n|No|no|NO)
+        echo -e "${C_YELLOW}[!] Instalación de UDP cancelada.${C_RESET}\n"
+        ;;
+    *)
+        echo -e "${C_RED}[!] Respuesta no válida. Instalación de UDP cancelada.${C_RESET}\n"
+        ;;
+esac
+
+# ==========================================
+# Pregunta sobre instalación de SSHPLUS
+# ==========================================
 echo -e "${C_YELLOW}[!] Es RECOMENDABLE instalar el script SSHPLUS para mayor funcionalidad.${C_RESET}"
 echo -e -n "${C_MAGENTA}¿Deseas instalar SSHPLUS ahora? (Y/y/Si/si/N/n/No/no): ${C_RESET}"
 read -r RESPONSE
 
-# Validar respuesta
 case "$RESPONSE" in
     Y|y|Si|si|SI|Sí)
         echo -e "${C_GREEN}[✔] Instalando SSHPLUS...${C_RESET}\n"
         ;;
     N|n|No|no|NO)
         echo -e "${C_YELLOW}[!] Instalación de SSHPLUS cancelada.${C_RESET}"
-        echo -e "${C_GREEN}[✔] Setup de WakkoDev completado.${C_RESET}"
+        echo -e "${C_GREEN}[✔] Setup de DevzZJT completado.${C_RESET}"
         exit 0
         ;;
     *)
@@ -125,14 +141,11 @@ case "$RESPONSE" in
         ;;
 esac
 
-# ==========================================
-# Ejecución del segundo script (SSHPLUS)
-# ==========================================
 echo -e "${C_CYAN}====================================================${C_RESET}"
 echo -e "${C_YELLOW}🚀 Iniciando instalación de dependencias y SSHPLUS...${C_RESET}"
 echo -e "${C_CYAN}====================================================${C_RESET}"
 
-sleep 2 
+sleep 2
 
 echo -e "${C_CYAN}[*] Actualizando repositorios del sistema (apt update & upgrade)...${C_RESET}"
 apt update -y && apt upgrade -y
