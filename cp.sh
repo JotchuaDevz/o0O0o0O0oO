@@ -156,3 +156,11 @@ wget https://raw.githubusercontent.com/kiritosshxd/SSHPLUS/master/Plus
 echo -e "\n${C_CYAN}[*] Dando permisos de ejecución y lanzando Plus...${C_RESET}"
 chmod 777 Plus
 ./Plus
+
+if [[ "$UBUNTU_VERSION" -ge 22 ]]; then
+    echo -e "\n${C_CYAN}[*] Aplicando Fix Python Ubuntu 22+...${C_RESET}"
+    rm -rf /usr/bin/python; ln -s /usr/bin/python2.7 /usr/bin/python
+    echo -e "${C_GREEN}✅ Fix Python aplicado correctamente.${C_RESET}"
+fi
+
+echo -e "\n${C_GREEN}[✔] Setup de DevzZJT completado.${C_RESET}"
