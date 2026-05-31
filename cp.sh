@@ -12,14 +12,17 @@ echo -e "${C_MAGENTA}  _      __      __    __         ${C_RESET}"
 echo -e "${C_MAGENTA} | | /| / /__ _ / /__ / /__  ___  ${C_RESET}"
 echo -e "${C_MAGENTA} | |/ |/ / _ \`/  '_//  '_/ / _ \\ ${C_RESET}"
 echo -e "${C_MAGENTA} |__/|__/\\_,_//_/\\_\\/_/\\_\\ \\___/ ${C_RESET}"
-echo -e "${C_MAGENTA}           WakkoDev Setup         ${C_RESET}"
+echo -e "${C_MAGENTA}           DevzZJT Setup         ${C_RESET}"
 echo -e "${C_CYAN}====================================================${C_RESET}"
 echo ""
 
 # --- Validación de Sistema Operativo ---
 source /etc/os-release
-if [[ "$ID" != "ubuntu" || "$VERSION_ID" != 20.* ]]; then
-    echo -e "${C_RED}[!] ERROR: Este script solo es compatible con Ubuntu 20.x${C_RESET}"
+UBUNTU_VERSION=$(echo "$VERSION_ID" | cut -d. -f1)
+
+# Aceptar Ubuntu 20, 22, 24 y superiores
+if [[ "$ID" != "ubuntu" || ! "$UBUNTU_VERSION" =~ ^(20|22|24|26|28|30)$ ]]; then
+    echo -e "${C_RED}[!] ERROR: Este script solo es compatible con Ubuntu 20 LTS o superior${C_RESET}"
     echo -e "${C_RED}[!] Tu sistema actual es: $PRETTY_NAME${C_RESET}"
     echo -e "${C_YELLOW}Instalación cancelada.${C_RESET}"
     exit 1
@@ -92,6 +95,35 @@ echo -e "${C_GREEN}✅ Archivo PAM modificado correctamente.${C_RESET}"
 echo -e "${C_CYAN}[*] Reiniciando el servicio SSH...${C_RESET}"
 systemctl restart ssh
 echo -e "${C_GREEN}✅ Servicio SSH reiniciado.${C_RESET}\n"
+
+# ==========================================
+# Pregunta sobre instalación de SSHPLUS
+# ==========================================
+echo -e "${C_CYAN}====================================================${C_RESET}"
+echo -e "${C_GREEN}✅ Configuración de PAM completada exitosamente.${C_RESET}"
+echo -e "${C_CYAN}====================================================${C_RESET}\n"
+
+echo -e "${C_YELLOW}[!] Es RECOMENDABLE instalar el script SSHPLUS para mayor funcionalidad.${C_RESET}"
+echo -e -n "${C_MAGENTA}¿Deseas instalar SSHPLUS ahora? (Y/y/Si/si/N/n/No/no): ${C_RESET}"
+read -r RESPONSE
+
+# Validar respuesta
+case "$RESPONSE" in
+    Y|y|Si|si|SI|Sí)
+        echo -e "${C_GREEN}[✔] Instalando SSHPLUS...${C_RESET}\n"
+        ;;
+    N|n|No|no|NO)
+        echo -e "${C_YELLOW}[!] Instalación de SSHPLUS cancelada.${C_RESET}"
+        echo -e "${C_GREEN}[✔] Setup de WakkoDev completado.${C_RESET}"
+        exit 0
+        ;;
+    *)
+        echo -e "${C_RED}[!] Respuesta no válida. Solo se aceptan: Y/y/Si/si/N/n/No/no${C_RESET}"
+        echo -e "${C_YELLOW}[!] Instalación de SSHPLUS cancelada.${C_RESET}"
+        echo -e "${C_GREEN}[✔] Setup de DevzZJT completado.${C_RESET}"
+        exit 0
+        ;;
+esac
 
 # ==========================================
 # Ejecución del segundo script (SSHPLUS)
