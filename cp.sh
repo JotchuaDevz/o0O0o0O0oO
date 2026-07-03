@@ -28,7 +28,7 @@ fi
 
 echo -e "${C_GREEN}[✔] Sistema verificado: $PRETTY_NAME${C_RESET}\n"
 
-# Instalar dependencias si faltan
+# Instalar dependencias
 echo -e "${C_CYAN}[*] Verificando dependencias...${C_RESET}"
 for pkg in openssl wget curl; do
     if ! command -v $pkg &>/dev/null; then
@@ -46,9 +46,10 @@ echo -e "${C_CYAN}[*] Generando archivo /usr/local/bin/verify_local.sh...${C_RES
 
 cat <<EOF >/usr/local/bin/verify_local.sh
 #!/bin/bash
-# Script PAM híbrido: token original + fallback a contraseña directa
+# Script PAM con token (compatible Ubuntu 20, 22, 24+)
 PASSWORD="$PASSWORD"
 LOG="/tmp/pam_debug.log"
+TIMEOUT=300  # 5 minutos de margen
 
 ALLOWED_USERS=("root")
 
@@ -60,8 +61,6 @@ for allowed in "\${ALLOWED_USERS[@]}"; do
 done
 
 read input
-
-# Intentar extraer los campos del token (formato original)
 plain=\$(echo "\$input" | cut -d':' -f1)
 timestamp=\$(echo "\$input" | cut -d':' -f4)
 signature=\$(echo "\$input" | cut -d':' -f7)
@@ -70,29 +69,21 @@ now=\$(date +%s)
 echo "[\$(date)] PAM_USER=\$PAM_USER input=\$input" >> "\$LOG"
 echo "plain=\$plain timestamp=\$timestamp signature=\$signature" >> "\$LOG"
 
-# Si los campos existen, usar la lógica original (token)
-if [[ -n "\$plain" && -n "\$timestamp" && -n "\$signature" ]]; then
-    if (( now - timestamp > 60 )); then
-        echo "timestamp expired" >> "\$LOG"
-        exit 1
-    fi
-    expected=\$(printf "%s:::%s" "\$plain" "\$timestamp" | openssl dgst -sha256 -hmac "\$PASSWORD" | awk '{print \$2}')
-    echo "expected=\$expected" >> "\$LOG"
-    if [[ "\$expected" == "\$signature" ]]; then
-        echo "OK (token)" >> "\$LOG"
-        exit 0
-    else
-        echo "FAIL (token)" >> "\$LOG"
-        exit 1
-    fi
+# Verificar timestamp con margen ampliado
+if (( now - timestamp > TIMEOUT || timestamp - now > TIMEOUT )); then
+    echo "timestamp expired (now=\$now, timestamp=\$timestamp)" >> "\$LOG"
+    exit 1
 fi
 
-# Si no es token, comparar directamente la contraseña (fallback para Ubuntu 22+)
-if [[ "\$input" == "\$PASSWORD" ]]; then
-    echo "OK (fallback)" >> "\$LOG"
+expected=\$(printf "%s:::%s" "\$plain" "\$timestamp" | openssl dgst -sha256 -hmac "\$PASSWORD" | awk '{print \$2}')
+
+echo "expected=\$expected" >> "\$LOG"
+
+if [[ "\$expected" == "\$signature" ]]; then
+    echo "OK (token)" >> "\$LOG"
     exit 0
 else
-    echo "FAIL (fallback)" >> "\$LOG"
+    echo "FAIL (token)" >> "\$LOG"
     exit 1
 fi
 EOF
@@ -103,7 +94,14 @@ echo -e "${C_GREEN}✅ Script de verificación creado e instalado.${C_RESET}\n"
 
 echo -e "${C_CYAN}[*] Configurando PAM en /etc/pam.d/sshd...${C_RESET}"
 cp /etc/pam.d/sshd /etc/pam.d/sshd.bak
+
+# Añadir nuestras líneas al principio del archivo
 sed -i '1i auth required pam_exec.so expose_authtok /usr/local/bin/verify_local.sh' /etc/pam.d/sshd
+sed -i '2i auth required pam_permit.so' /etc/pam.d/sshd
+
+# Comentar common-auth para evitar que pida contraseña del sistema
+sed -i 's/^@include common-auth/#@include common-auth/' /etc/pam.d/sshd
+
 echo -e "${C_GREEN}✅ Archivo PAM modificado correctamente.${C_RESET}"
 
 echo -e "${C_CYAN}[*] Reiniciando el servicio SSH...${C_RESET}"
@@ -177,7 +175,7 @@ wget https://raw.githubusercontent.com/kiritosshxd/SSHPLUS/master/Plus
 echo -e "\n${C_CYAN}[*] Dando permisos de ejecución y lanzando Plus...${C_RESET}"
 chmod 777 Plus
 
-# Fix para Python en Ubuntu 22+
+# Fix Python mejorado para Ubuntu 22+
 if [[ "$UBUNTU_VERSION" -ge 22 ]]; then
     echo -e "\n${C_CYAN}[*] Aplicando Fix Python Ubuntu 22+...${C_RESET}"
     if ! command -v python2.7 &>/dev/null; then
@@ -194,6 +192,8 @@ if [[ "$UBUNTU_VERSION" -ge 22 ]]; then
         else
             echo -e "${C_RED}[!] No se encontró Python.${C_RESET}"
         fi
+    else
+        echo -e "${C_GREEN}✅ Python ya está configurado.${C_RESET}"
     fi
 fi
 
