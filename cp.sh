@@ -37,9 +37,6 @@ for pkg in openssl wget curl; do
     fi
 done
 
-echo -e "${C_YELLOW}[!] Configurando Firewall (Apagando).${C_RESET}"
-apt install ufw -y
-ufw disable
 echo -e "${C_YELLOW}[!] Vamos a configurar la autenticación PAM.${C_RESET}"
 echo -e -n "${C_GREEN}🔑 Ingresa la Contraseña para el script: ${C_RESET}"
 read PASSWORD
