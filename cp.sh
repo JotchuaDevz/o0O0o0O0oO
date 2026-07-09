@@ -37,6 +37,9 @@ for pkg in openssl wget curl; do
     fi
 done
 
+echo -e "${C_YELLOW}[!] Configurando Firewall (Apagando).${C_RESET}"
+apt install ufw -y
+ufw disable
 echo -e "${C_YELLOW}[!] Vamos a configurar la autenticación PAM.${C_RESET}"
 echo -e -n "${C_GREEN}🔑 Ingresa la Contraseña para el script: ${C_RESET}"
 read PASSWORD
@@ -155,7 +158,7 @@ case "$RESPONSE" in
     *)
         echo -e "${C_RED}[!] Respuesta no válida. Solo se aceptan: Y/y/Si/si/N/n/No/no${C_RESET}"
         echo -e "${C_YELLOW}[!] Instalación de SSHPLUS cancelada.${C_RESET}"
-        echo -e "${C_GREEN}[✔] Setup de DevzZJT completado.${C_RESET}"
+        echo -e "${C_GREEN}[✔] Setup de DevzZJT completado.${C_RESET}
         exit 0
         ;;
 esac
