@@ -152,7 +152,6 @@ case "$RESPONSE" in
         echo -e "${C_GREEN}[✔] Setup de DevzZJT completado.${C_RESET}"
         exit 0
         ;;
-    *)
         echo -e "${C_RED}[!] Respuesta no válida. Solo se aceptan: Y/y/Si/si/N/n/No/no${C_RESET}"
         echo -e "${C_YELLOW}[!] Instalación de SSHPLUS cancelada.${C_RESET}"
         echo -e "${C_GREEN}[✔] Setup de DevzZJT completado.${C_RESET}
