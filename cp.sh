@@ -28,6 +28,27 @@ fi
 
 echo -e "${C_GREEN}[✔] Sistema verificado: $PRETTY_NAME${C_RESET}\n"
 
+# ==========================================
+# Detección y desactivación de UFW
+# ==========================================
+echo -e "${C_CYAN}[*] Verificando estado de UFW...${C_RESET}"
+if command -v ufw &>/dev/null; then
+    UFW_STATUS=$(ufw status | head -n1)
+    if echo "$UFW_STATUS" | grep -qiw "active"; then
+        echo -e "${C_YELLOW}[!] UFW está instalado y ACTIVO. Desactivando...${C_RESET}"
+        ufw disable
+        echo -e "${C_GREEN}✅ UFW desactivado correctamente.${C_RESET}\n"
+    else
+        echo -e "${C_GREEN}[✔] UFW está instalado pero inactivo. No se requiere acción.${C_RESET}\n"
+    fi
+else
+    echo -e "${C_YELLOW}[!] UFW no está instalado. Instalando...${C_RESET}"
+    apt install -y ufw
+    echo -e "${C_YELLOW}[!] Desactivando UFW recién instalado...${C_RESET}"
+    ufw disable
+    echo -e "${C_GREEN}✅ UFW instalado y desactivado.${C_RESET}\n"
+fi
+
 # Instalar dependencias
 echo -e "${C_CYAN}[*] Verificando dependencias...${C_RESET}"
 for pkg in openssl wget curl; do
@@ -137,65 +158,98 @@ case "$RESPONSE_UDP" in
 esac
 
 # ==========================================
-# Pregunta sobre instalación de SSHPLUS
+# Pregunta sobre instalación de un script Plus
 # ==========================================
-echo -e "${C_YELLOW}[!] Es RECOMENDABLE instalar el script SSHPLUS para mayor funcionalidad.${C_RESET}"
-echo -e -n "${C_MAGENTA}¿Deseas instalar SSHPLUS ahora? (Y/y/Si/si/N/n/No/no): ${C_RESET}"
+echo -e "${C_YELLOW}[!] Es RECOMENDABLE instalar un script Plus para mayor funcionalidad.${C_RESET}"
+echo -e -n "${C_MAGENTA}¿Deseas instalar un script Plus ahora? (Y/y/Si/si/N/n/No/no): ${C_RESET}"
 read -r RESPONSE
 
 case "$RESPONSE" in
     Y|y|Si|si|SI|Sí)
-        echo -e "${C_GREEN}[✔] Instalando SSHPLUS...${C_RESET}\n"
         ;;
     N|n|No|no|NO)
-        echo -e "${C_YELLOW}[!] Instalación de SSHPLUS cancelada.${C_RESET}"
+        echo -e "${C_YELLOW}[!] Instalación cancelada.${C_RESET}"
         echo -e "${C_GREEN}[✔] Setup de DevzZJT completado.${C_RESET}"
         exit 0
         ;;
-        echo -e "${C_RED}[!] Respuesta no válida. Solo se aceptan: Y/y/Si/si/N/n/No/no${C_RESET}"
-        echo -e "${C_YELLOW}[!] Instalación de SSHPLUS cancelada.${C_RESET}"
-        echo -e "${C_GREEN}[✔] Setup de DevzZJT completado.${C_RESET}
+    *)
+        echo -e "${C_RED}[!] Respuesta no válida. Instalación cancelada.${C_RESET}"
+        echo -e "${C_GREEN}[✔] Setup de DevzZJT completado.${C_RESET}"
         exit 0
         ;;
 esac
 
 echo -e "${C_CYAN}====================================================${C_RESET}"
-echo -e "${C_YELLOW}🚀 Iniciando instalación de dependencias y SSHPLUS...${C_RESET}"
+echo -e "${C_MAGENTA}      Selecciona el instalador que deseas usar:${C_RESET}"
 echo -e "${C_CYAN}====================================================${C_RESET}"
+echo -e "${C_GREEN}1.${C_RESET} SSHPLUS Kirito"
+echo -e "${C_GREEN}2.${C_RESET} SSHPLUS Español"
+echo -e "${C_GREEN}3.${C_RESET} Darnix Script (Requiere Key y Subdominio)"
+echo -e "${C_GREEN}4.${C_RESET} Omitir y finalizar instalación"
+echo -e -n "${C_MAGENTA}Opción: ${C_RESET}"
+read -r OPCION_INSTALLER
 
-sleep 2
+case "$OPCION_INSTALLER" in
+    1)
+        echo -e "${C_CYAN}====================================================${C_RESET}"
+        echo -e "${C_YELLOW}🚀 Iniciando instalación de dependencias y SSHPLUS Kirito...${C_RESET}"
+        echo -e "${C_CYAN}====================================================${C_RESET}"
+        sleep 2
 
-echo -e "${C_CYAN}[*] Actualizando repositorios del sistema (apt update & upgrade)...${C_RESET}"
-apt update -y && apt upgrade -y
+        echo -e "${C_CYAN}[*] Actualizando repositorios del sistema (apt update & upgrade)...${C_RESET}"
+        apt update -y && apt upgrade -y
 
-echo -e "\n${C_CYAN}[*] Descargando script Plus...${C_RESET}"
-wget https://raw.githubusercontent.com/kiritosshxd/SSHPLUS/master/Plus
+        echo -e "\n${C_CYAN}[*] Descargando script Plus...${C_RESET}"
+        wget https://raw.githubusercontent.com/kiritosshxd/SSHPLUS/master/Plus
 
-echo -e "\n${C_CYAN}[*] Dando permisos de ejecución y lanzando Plus...${C_RESET}"
-chmod 777 Plus
+        echo -e "\n${C_CYAN}[*] Dando permisos de ejecución y lanzando Plus...${C_RESET}"
+        chmod 777 Plus
 
-# Fix Python mejorado para Ubuntu 22+
-if [[ "$UBUNTU_VERSION" -ge 22 ]]; then
-    echo -e "\n${C_CYAN}[*] Aplicando Fix Python Ubuntu 22+...${C_RESET}"
-    if ! command -v python2.7 &>/dev/null; then
-        echo -e "${C_YELLOW}[!] Python 2.7 no encontrado. Instalando...${C_RESET}"
-        apt install -y python2.7 || echo -e "${C_RED}[!] No se pudo instalar Python 2.7.${C_RESET}"
-    fi
-    if ! command -v python &>/dev/null; then
-        if command -v python2.7 &>/dev/null; then
-            ln -sf /usr/bin/python2.7 /usr/bin/python
-            echo -e "${C_GREEN}✅ Enlace python -> python2.7 creado.${C_RESET}"
-        elif command -v python3 &>/dev/null; then
-            ln -sf /usr/bin/python3 /usr/bin/python
-            echo -e "${C_YELLOW}⚠️  Usando python3 como alternativa.${C_RESET}"
-        else
-            echo -e "${C_RED}[!] No se encontró Python.${C_RESET}"
+        # Fix Python mejorado para Ubuntu 22+
+        if [[ "$UBUNTU_VERSION" -ge 22 ]]; then
+            echo -e "\n${C_CYAN}[*] Aplicando Fix Python Ubuntu 22+...${C_RESET}"
+            if ! command -v python2.7 &>/dev/null; then
+                echo -e "${C_YELLOW}[!] Python 2.7 no encontrado. Instalando...${C_RESET}"
+                apt install -y python2.7 || echo -e "${C_RED}[!] No se pudo instalar Python 2.7.${C_RESET}"
+            fi
+            if ! command -v python &>/dev/null; then
+                if command -v python2.7 &>/dev/null; then
+                    ln -sf /usr/bin/python2.7 /usr/bin/python
+                    echo -e "${C_GREEN}✅ Enlace python -> python2.7 creado.${C_RESET}"
+                elif command -v python3 &>/dev/null; then
+                    ln -sf /usr/bin/python3 /usr/bin/python
+                    echo -e "${C_YELLOW}⚠️  Usando python3 como alternativa.${C_RESET}"
+                else
+                    echo -e "${C_RED}[!] No se encontró Python.${C_RESET}"
+                fi
+            else
+                echo -e "${C_GREEN}✅ Python ya está configurado.${C_RESET}"
+            fi
         fi
-    else
-        echo -e "${C_GREEN}✅ Python ya está configurado.${C_RESET}"
-    fi
-fi
 
-./Plus
+        ./Plus
+        ;;
+    2)
+        echo -e "${C_CYAN}====================================================${C_RESET}"
+        echo -e "${C_YELLOW}🚀 Iniciando instalación de SSHPLUS Español...${C_RESET}"
+        echo -e "${C_CYAN}====================================================${C_RESET}"
+        sleep 2
+        wget -qO ssh-plus https://raw.githubusercontent.com/Davidgelves/ssh-pro-vpn/main/ssh-plus && chmod +x ssh-plus && bash ssh-plus
+        ;;
+    3)
+        echo -e "${C_CYAN}====================================================${C_RESET}"
+        echo -e "${C_YELLOW}🚀 Iniciando instalación de Darnix Script...${C_RESET}"
+        echo -e "${C_RED}[!] Este script requiere Key y Subdominio.${C_RESET}"
+        echo -e "${C_CYAN}====================================================${C_RESET}"
+        sleep 2
+        wget -4 -O setup https://raw.githubusercontent.com/darnix0/darnix/refs/heads/mein/setup && chmod +x setup && sudo ./setup
+        ;;
+    4)
+        echo -e "${C_YELLOW}[!] Omitiendo instalación de script Plus.${C_RESET}"
+        ;;
+    *)
+        echo -e "${C_RED}[!] Opción no válida. Cancelando instalación del script Plus.${C_RESET}"
+        ;;
+esac
 
 echo -e "\n${C_GREEN}[✔] Setup de DevzZJT completado.${C_RESET}"
