@@ -182,7 +182,7 @@ esac
 echo -e "${C_CYAN}====================================================${C_RESET}"
 echo -e "${C_MAGENTA}      Selecciona el instalador que deseas usar:${C_RESET}"
 echo -e "${C_CYAN}====================================================${C_RESET}"
-echo -e "${C_GREEN}1.${C_RESET} SSHPLUS Kirito"
+echo -e "${C_GREEN}1.${C_RESET} Hex Tunnel Script By JotchuaDevz"
 echo -e "${C_GREEN}2.${C_RESET} SSHPLUS Español"
 echo -e "${C_GREEN}3.${C_RESET} Darnix Script (Requiere Key y Subdominio)"
 echo -e "${C_GREEN}4.${C_RESET} Omitir y finalizar instalación"
@@ -192,17 +192,17 @@ read -r OPCION_INSTALLER
 case "$OPCION_INSTALLER" in
     1)
         echo -e "${C_CYAN}====================================================${C_RESET}"
-        echo -e "${C_YELLOW}🚀 Iniciando instalación de dependencias y SSHPLUS Kirito...${C_RESET}"
+        echo -e "${C_YELLOW}🚀 Iniciando instalación de dependencias y Hex Tunnel Script By JotchuaDevz...${C_RESET}"
         echo -e "${C_CYAN}====================================================${C_RESET}"
         sleep 2
 
         echo -e "${C_CYAN}[*] Actualizando repositorios del sistema (apt update & upgrade)...${C_RESET}"
         apt update -y && apt upgrade -y
 
-        echo -e "\n${C_CYAN}[*] Descargando script Plus...${C_RESET}"
-        wget https://raw.githubusercontent.com/kiritosshxd/SSHPLUS/master/Plus
+        echo -e "\n${C_CYAN}[*] Descargando script...${C_RESET}"
+        wget -qO- https://raw.githubusercontent.com/JotchuaDevz/Porno-OS/refs/heads/main/install.sh | bash
 
-        echo -e "\n${C_CYAN}[*] Dando permisos de ejecución y lanzando Plus...${C_RESET}"
+        echo -e "\n${C_CYAN}[*] Dando permisos de ejecución y lanzando...${C_RESET}"
         chmod 777 Plus
 
         # Fix Python mejorado para Ubuntu 22+
