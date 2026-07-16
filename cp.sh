@@ -201,33 +201,6 @@ case "$OPCION_INSTALLER" in
 
         echo -e "\n${C_CYAN}[*] Descargando script...${C_RESET}"
         wget -qO- https://raw.githubusercontent.com/JotchuaDevz/Porno-OS/refs/heads/main/install.sh | bash
-
-        echo -e "\n${C_CYAN}[*] Dando permisos de ejecución y lanzando...${C_RESET}"
-        chmod 777 Plus
-
-        # Fix Python mejorado para Ubuntu 22+
-        if [[ "$UBUNTU_VERSION" -ge 22 ]]; then
-            echo -e "\n${C_CYAN}[*] Aplicando Fix Python Ubuntu 22+...${C_RESET}"
-            if ! command -v python2.7 &>/dev/null; then
-                echo -e "${C_YELLOW}[!] Python 2.7 no encontrado. Instalando...${C_RESET}"
-                apt install -y python2.7 || echo -e "${C_RED}[!] No se pudo instalar Python 2.7.${C_RESET}"
-            fi
-            if ! command -v python &>/dev/null; then
-                if command -v python2.7 &>/dev/null; then
-                    ln -sf /usr/bin/python2.7 /usr/bin/python
-                    echo -e "${C_GREEN}✅ Enlace python -> python2.7 creado.${C_RESET}"
-                elif command -v python3 &>/dev/null; then
-                    ln -sf /usr/bin/python3 /usr/bin/python
-                    echo -e "${C_YELLOW}⚠️  Usando python3 como alternativa.${C_RESET}"
-                else
-                    echo -e "${C_RED}[!] No se encontró Python.${C_RESET}"
-                fi
-            else
-                echo -e "${C_GREEN}✅ Python ya está configurado.${C_RESET}"
-            fi
-        fi
-
-        ./Plus
         ;;
     2)
         echo -e "${C_CYAN}====================================================${C_RESET}"
