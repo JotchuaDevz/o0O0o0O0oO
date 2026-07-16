@@ -200,7 +200,9 @@ case "$OPCION_INSTALLER" in
         apt update -y && apt upgrade -y
 
         echo -e "\n${C_CYAN}[*] Descargando script...${C_RESET}"
-        wget -qO- https://raw.githubusercontent.com/JotchuaDevz/Porno-OS/refs/heads/main/install.sh | bash
+        wget -qO install.sh https://raw.githubusercontent.com/JotchuaDevz/Porno-OS/refs/heads/main/install.sh
+        chmod +x install.sh
+        ./install.sh
         ;;
     2)
         echo -e "${C_CYAN}====================================================${C_RESET}"
