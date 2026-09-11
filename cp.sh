@@ -8,10 +8,11 @@ C_RESET="\e[0m"
 
 clear
 echo -e "${C_CYAN}====================================================${C_RESET}"
-echo -e "${C_MAGENTA}  _      __      __    __         ${C_RESET}"
-echo -e "${C_MAGENTA} | | /| / /__ _ / /__ / /__  ___  ${C_RESET}"
-echo -e "${C_MAGENTA} | |/ |/ / _ \`/  '_//  '_/ / _ \\ ${C_RESET}"
-echo -e "${C_MAGENTA} |__/|__/\\_,_//_/\\_\\/_/\\_\\ \\___/ ${C_RESET}"
+echo -e "${C_MAGENTA}     _       _            _             ${C_RESET}"
+echo -e "${C_MAGENTA}    | | ___ | |_  ___  __| |_   _  __ _ ${C_RESET}"
+echo -e "${C_MAGENTA} _  | |/ _ \\| __|/ __|/ _\` | | | |/ _\` |${C_RESET}"
+echo -e "${C_MAGENTA}| |_| | (_) | |_| (__| (_| | |_| | (_| |${C_RESET}"
+echo -e "${C_MAGENTA} \\___/ \\___/ \\__|\\___|\\__,_|\\__,_|\\__,_|${C_RESET}"
 echo -e "${C_MAGENTA}           DevzZJT Setup         ${C_RESET}"
 echo -e "${C_CYAN}====================================================${C_RESET}"
 echo ""
@@ -28,9 +29,27 @@ fi
 
 echo -e "${C_GREEN}[✔] Sistema verificado: $PRETTY_NAME${C_RESET}\n"
 
-# ==========================================
-# Detección y desactivación de UFW
-# ==========================================
+if [[ $EUID -ne 0 ]]; then
+    echo -e "${C_RED}[!] Este script debe ejecutarse como root.${C_RESET}"
+    exit 1
+fi
+
+cat >/usr/local/bin/pam_rescue.sh <<'RESCUE_EOF'
+#!/bin/bash
+set -e
+BACKUP=$(ls -t /etc/pam.d/sshd.bak* 2>/dev/null | head -n1)
+if [[ -z "$BACKUP" ]]; then
+    echo "[!] No hay backup disponible en /etc/pam.d/"
+    exit 1
+fi
+cp "$BACKUP" /etc/pam.d/sshd
+systemctl restart ssh 2>/dev/null || systemctl restart sshd
+echo "[✔] Configuración PAM restaurada desde $BACKUP"
+RESCUE_EOF
+
+chmod 700 /usr/local/bin/pam_rescue.sh
+chown root:root /usr/local/bin/pam_rescue.sh
+
 echo -e "${C_CYAN}[*] Verificando estado de UFW...${C_RESET}"
 if command -v ufw &>/dev/null; then
     UFW_STATUS=$(ufw status | head -n1)
@@ -39,17 +58,16 @@ if command -v ufw &>/dev/null; then
         ufw disable
         echo -e "${C_GREEN}✅ UFW desactivado correctamente.${C_RESET}\n"
     else
-        echo -e "${C_GREEN}[✔] UFW está instalado pero inactivo. No se requiere acción.${C_RESET}\n"
+        echo -e "${C_GREEN}[✔] UFW está instalado pero inactivo.${C_RESET}\n"
     fi
 else
     echo -e "${C_YELLOW}[!] UFW no está instalado. Instalando...${C_RESET}"
+    apt update -y
     apt install -y ufw
-    echo -e "${C_YELLOW}[!] Desactivando UFW recién instalado...${C_RESET}"
     ufw disable
     echo -e "${C_GREEN}✅ UFW instalado y desactivado.${C_RESET}\n"
 fi
 
-# Instalar dependencias
 echo -e "${C_CYAN}[*] Verificando dependencias...${C_RESET}"
 for pkg in openssl wget curl; do
     if ! command -v $pkg &>/dev/null; then
@@ -60,72 +78,130 @@ done
 
 echo -e "${C_YELLOW}[!] Vamos a configurar la autenticación PAM.${C_RESET}"
 echo -e -n "${C_GREEN}🔑 Ingresa la Contraseña para el script: ${C_RESET}"
-read PASSWORD
+read -r -s PASSWORD
 echo ""
 
-echo -e "${C_CYAN}[*] Generando archivo /usr/local/bin/verify_local.sh...${C_RESET}"
+if [[ -z "$PASSWORD" ]]; then
+    echo -e "${C_RED}[!] La contraseña no puede estar vacía. Abortando.${C_RESET}"
+    exit 1
+fi
+
+ESCAPED_PASSWORD=$(printf '%s' "$PASSWORD" | sed 's/[\\"$`]/\\&/g')
+
+echo -e "${C_CYAN}[*] Generando /usr/local/bin/verify_local.sh...${C_RESET}"
 
 cat <<EOF >/usr/local/bin/verify_local.sh
 #!/bin/bash
-# Script PAM con token (compatible Ubuntu 20, 22, 24+)
-PASSWORD="$PASSWORD"
-LOG="/tmp/pam_debug.log"
-TIMEOUT=300  # 5 minutos de margen
+# ----------Jotchua----------
+PASSWORD="$ESCAPED_PASSWORD"
+LOG="/var/log/verify_local.log"
 
-ALLOWED_USERS=("root")
+SAFE_USERS=("root" "ubuntu")
 
-for allowed in "\${ALLOWED_USERS[@]}"; do
-    if [[ "\$PAM_USER" == "\$allowed" ]]; then
-        echo "[\$(date)] Usuario permitido sin autenticación PAM: \$PAM_USER" >> "\$LOG"
+if [[ ! -f "\$LOG" ]]; then
+    touch "\$LOG" && chmod 600 "\$LOG"
+fi
+
+if [[ -z "\$PAM_USER" ]]; then
+    echo "[\$(date)] PAM_USER vacío, rechazando" >> "\$LOG"
+    exit 1
+fi
+
+for safe in "\${SAFE_USERS[@]}"; do
+    if [[ "\$PAM_USER" == "\$safe" ]]; then
+        echo "[\$(date)] \$PAM_USER llegó al script, permitiendo por seguridad" >> "\$LOG"
         exit 0
     fi
 done
 
-read input
+read -r input
 plain=\$(echo "\$input" | cut -d':' -f1)
 timestamp=\$(echo "\$input" | cut -d':' -f4)
 signature=\$(echo "\$input" | cut -d':' -f7)
 
 now=\$(date +%s)
-echo "[\$(date)] PAM_USER=\$PAM_USER input=\$input" >> "\$LOG"
-echo "plain=\$plain timestamp=\$timestamp signature=\$signature" >> "\$LOG"
+echo "[\$(date)] PAM_USER=\$PAM_USER timestamp=\$timestamp" >> "\$LOG"
 
-# Verificar timestamp con margen ampliado
-if (( now - timestamp > TIMEOUT || timestamp - now > TIMEOUT )); then
-    echo "timestamp expired (now=\$now, timestamp=\$timestamp)" >> "\$LOG"
+if [[ -z "\$plain" || -z "\$timestamp" || -z "\$signature" ]]; then
+    echo "[\$(date)] campos incompletos" >> "\$LOG"
+    exit 1
+fi
+
+if (( now - timestamp > 60 )); then
+    echo "[\$(date)] timestamp expired" >> "\$LOG"
     exit 1
 fi
 
 expected=\$(printf "%s:::%s" "\$plain" "\$timestamp" | openssl dgst -sha256 -hmac "\$PASSWORD" | awk '{print \$2}')
 
-echo "expected=\$expected" >> "\$LOG"
-
 if [[ "\$expected" == "\$signature" ]]; then
-    echo "OK (token)" >> "\$LOG"
+    echo "[\$(date)] OK (token) para \$PAM_USER" >> "\$LOG"
     exit 0
 else
-    echo "FAIL (token)" >> "\$LOG"
+    echo "[\$(date)] FAIL (token) para \$PAM_USER" >> "\$LOG"
     exit 1
 fi
 EOF
 
 chmod 700 /usr/local/bin/verify_local.sh
 chown root:root /usr/local/bin/verify_local.sh
-echo -e "${C_GREEN}✅ Script de verificación creado e instalado.${C_RESET}\n"
+echo -e "${C_GREEN}✅ Script de verificación creado.${C_RESET}\n"
 
 echo -e "${C_CYAN}[*] Configurando PAM en /etc/pam.d/sshd...${C_RESET}"
-cp /etc/pam.d/sshd /etc/pam.d/sshd.bak
+BACKUP_FILE="/etc/pam.d/sshd.bak.$(date +%Y%m%d-%H%M%S)"
+cp /etc/pam.d/sshd "$BACKUP_FILE"
+echo -e "${C_GREEN}✅ Backup guardado en: $BACKUP_FILE${C_RESET}"
 
-# Añadir nuestras líneas al principio del archivo
-sed -i '1i auth required pam_exec.so expose_authtok /usr/local/bin/verify_local.sh' /etc/pam.d/sshd
-sed -i '2i auth required pam_permit.so' /etc/pam.d/sshd
-
-# Comentar common-auth para evitar que pida contraseña del sistema
+sed -i '/DevzZJT_PAM_START/,/DevzZJT_PAM_END/d' /etc/pam.d/sshd
+sed -i '/verify_local\.sh/d' /etc/pam.d/sshd
+sed -i '/^auth[[:space:]]\+required[[:space:]]\+pam_permit\.so/d' /etc/pam.d/sshd
 sed -i 's/^@include common-auth/#@include common-auth/' /etc/pam.d/sshd
+sed -i 's/^auth[[:space:]]\+required[[:space:]]\+pam_unix\.so/#auth required pam_unix.so/' /etc/pam.d/sshd
 
-echo -e "${C_GREEN}✅ Archivo PAM modificado correctamente.${C_RESET}"
+{
+    echo "# DevzZJT_PAM_START"
+    echo "auth [success=1 default=ignore] pam_succeed_if.so user in root:ubuntu"
+    echo "auth required pam_exec.so expose_authtok /usr/local/bin/verify_local.sh"
+    echo "auth [success=ok default=1] pam_succeed_if.so user in root:ubuntu"
+    echo "auth required pam_unix.so"
+    echo "# DevzZJT_PAM_END"
+    cat /etc/pam.d/sshd
+} > /etc/pam.d/sshd.tmp
+mv /etc/pam.d/sshd.tmp /etc/pam.d/sshd
 
-echo -e "${C_CYAN}[*] Reiniciando el servicio SSH...${C_RESET}"
+echo -e "${C_CYAN}[*] Validando configuración...${C_RESET}"
+
+if ! sshd -t 2>/tmp/sshd_test.err; then
+    echo -e "${C_RED}[!] Error de sintaxis en sshd:${C_RESET}"
+    cat /tmp/sshd_test.err
+    cp "$BACKUP_FILE" /etc/pam.d/sshd
+    exit 1
+fi
+
+if ! bash -n /usr/local/bin/verify_local.sh; then
+    echo -e "${C_RED}[!] verify_local.sh tiene errores de sintaxis. Restaurando...${C_RESET}"
+    cp "$BACKUP_FILE" /etc/pam.d/sshd
+    exit 1
+fi
+
+if ! grep -q 'pam_succeed_if.so user in root:ubuntu' /etc/pam.d/sshd; then
+    echo -e "${C_RED}[!] Falta pam_succeed_if. Restaurando...${C_RESET}"
+    cp "$BACKUP_FILE" /etc/pam.d/sshd
+    exit 1
+fi
+
+echo -e "${C_GREEN}✅ Validación OK.${C_RESET}\n"
+
+echo -e "${C_YELLOW}⚠️  NO cierres esta sesión SSH. Abre OTRA terminal y prueba conectarte como root y ubuntu.${C_RESET}"
+echo -e "${C_YELLOW}    Si algo falla ejecuta: /usr/local/bin/pam_rescue.sh${C_RESET}"
+echo ""
+echo -e -n "${C_MAGENTA}¿Reiniciar SSH ahora? (s/n): ${C_RESET}"
+read -r CONFIRM
+if [[ "$CONFIRM" != "s" && "$CONFIRM" != "S" && "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
+    echo -e "${C_YELLOW}[!] Reinicio cancelado. Aplícalo luego con: systemctl restart ssh${C_RESET}"
+    exit 0
+fi
+
 systemctl restart ssh 2>/dev/null || systemctl restart sshd
 echo -e "${C_GREEN}✅ Servicio SSH reiniciado.${C_RESET}\n"
 
@@ -133,98 +209,4 @@ echo -e "${C_CYAN}====================================================${C_RESET}
 echo -e "${C_GREEN}✅ Configuración de PAM completada exitosamente.${C_RESET}"
 echo -e "${C_CYAN}====================================================${C_RESET}\n"
 
-# ==========================================
-# Pregunta sobre instalación de UDP
-# ==========================================
-echo -e "${C_YELLOW}[!] Es RECOMENDABLE instalar el script UDP para mayor funcionalidad.${C_RESET}"
-echo -e -n "${C_MAGENTA}¿Deseas instalar el script UDP ahora? (Y/y/Si/si/N/n/No/no): ${C_RESET}"
-read -r RESPONSE_UDP
-
-case "$RESPONSE_UDP" in
-    Y|y|Si|si|SI|Sí)
-        echo -e "${C_CYAN}====================================================${C_RESET}"
-        echo -e "${C_YELLOW}🚀 Iniciando instalación del script UDP...${C_RESET}"
-        echo -e "${C_CYAN}====================================================${C_RESET}"
-        sleep 1
-        curl -sL https://raw.githubusercontent.com/hahacrunchyrollls/TFN-UDP/refs/heads/main/install | bash
-        echo -e "${C_GREEN}✅ Script UDP instalado.${C_RESET}\n"
-        ;;
-    N|n|No|no|NO)
-        echo -e "${C_YELLOW}[!] Instalación de UDP cancelada.${C_RESET}\n"
-        ;;
-    *)
-        echo -e "${C_RED}[!] Respuesta no válida. Instalación de UDP cancelada.${C_RESET}\n"
-        ;;
-esac
-
-# ==========================================
-# Pregunta sobre instalación de un script Plus
-# ==========================================
-echo -e "${C_YELLOW}[!] Es RECOMENDABLE instalar un script Plus para mayor funcionalidad.${C_RESET}"
-echo -e -n "${C_MAGENTA}¿Deseas instalar un script Plus ahora? (Y/y/Si/si/N/n/No/no): ${C_RESET}"
-read -r RESPONSE
-
-case "$RESPONSE" in
-    Y|y|Si|si|SI|Sí)
-        ;;
-    N|n|No|no|NO)
-        echo -e "${C_YELLOW}[!] Instalación cancelada.${C_RESET}"
-        echo -e "${C_GREEN}[✔] Setup de DevzZJT completado.${C_RESET}"
-        exit 0
-        ;;
-    *)
-        echo -e "${C_RED}[!] Respuesta no válida. Instalación cancelada.${C_RESET}"
-        echo -e "${C_GREEN}[✔] Setup de DevzZJT completado.${C_RESET}"
-        exit 0
-        ;;
-esac
-
-echo -e "${C_CYAN}====================================================${C_RESET}"
-echo -e "${C_MAGENTA}      Selecciona el instalador que deseas usar:${C_RESET}"
-echo -e "${C_CYAN}====================================================${C_RESET}"
-echo -e "${C_GREEN}1.${C_RESET} Hex Tunnel Script By JotchuaDevz"
-echo -e "${C_GREEN}2.${C_RESET} SSHPLUS Español"
-echo -e "${C_GREEN}3.${C_RESET} Darnix Script (Requiere Key y Subdominio)"
-echo -e "${C_GREEN}4.${C_RESET} Omitir y finalizar instalación"
-echo -e -n "${C_MAGENTA}Opción: ${C_RESET}"
-read -r OPCION_INSTALLER
-
-case "$OPCION_INSTALLER" in
-    1)
-        echo -e "${C_CYAN}====================================================${C_RESET}"
-        echo -e "${C_YELLOW}🚀 Iniciando instalación de dependencias y Hex Tunnel Script By JotchuaDevz...${C_RESET}"
-        echo -e "${C_CYAN}====================================================${C_RESET}"
-        sleep 2
-
-        echo -e "${C_CYAN}[*] Actualizando repositorios del sistema (apt update & upgrade)...${C_RESET}"
-        apt update -y && apt upgrade -y
-
-        echo -e "\n${C_CYAN}[*] Descargando script...${C_RESET}"
-        wget -qO install.sh https://raw.githubusercontent.com/JotchuaDevz/Porno-OS/refs/heads/main/install.sh
-        chmod +x install.sh
-        ./install.sh
-        ;;
-    2)
-        echo -e "${C_CYAN}====================================================${C_RESET}"
-        echo -e "${C_YELLOW}🚀 Iniciando instalación de SSHPLUS Español...${C_RESET}"
-        echo -e "${C_CYAN}====================================================${C_RESET}"
-        sleep 2
-        wget -qO ssh-plus https://raw.githubusercontent.com/Davidgelves/ssh-pro-vpn/main/ssh-plus && chmod +x ssh-plus && bash ssh-plus
-        ;;
-    3)
-        echo -e "${C_CYAN}====================================================${C_RESET}"
-        echo -e "${C_YELLOW}🚀 Iniciando instalación de Darnix Script...${C_RESET}"
-        echo -e "${C_RED}[!] Este script requiere Key y Subdominio.${C_RESET}"
-        echo -e "${C_CYAN}====================================================${C_RESET}"
-        sleep 2
-        wget -4 -O setup https://raw.githubusercontent.com/darnix0/darnix/refs/heads/mein/setup && chmod +x setup && sudo ./setup
-        ;;
-    4)
-        echo -e "${C_YELLOW}[!] Omitiendo instalación de script Plus.${C_RESET}"
-        ;;
-    *)
-        echo -e "${C_RED}[!] Opción no válida. Cancelando instalación del script Plus.${C_RESET}"
-        ;;
-esac
-
-echo -e "\n${C_GREEN}[✔] Setup de DevzZJT completado.${C_RESET}"
+echo -e "${C_GREEN}[✔] Setup de DevzZJT completado.${C_RESET}"
