@@ -66,12 +66,27 @@ echo -e "${C_GREEN}✅ Backup guardado en: $BACKUP_FILE${C_RESET}"
 
 if grep -qE '^\s*#?\s*Include\s+/etc/ssh/sshd_config\.d/\*' "$SSHD_CONFIG"; then
     mkdir -p /etc/ssh/sshd_config.d
+
     cat >/etc/ssh/sshd_config.d/99-root-access.conf <<EOF
 PermitRootLogin yes
 PasswordAuthentication yes
 EOF
     chmod 600 /etc/ssh/sshd_config.d/99-root-access.conf
     echo -e "${C_GREEN}✅ Override creado en /etc/ssh/sshd_config.d/99-root-access.conf${C_RESET}"
+
+    for conf in /etc/ssh/sshd_config.d/*.conf; do
+        [[ "$conf" == "/etc/ssh/sshd_config.d/99-root-access.conf" ]] && continue
+        [[ ! -f "$conf" ]] && continue
+
+        if grep -qE '^\s*PasswordAuthentication\s+no' "$conf"; then
+            sed -i 's/^\s*PasswordAuthentication\s\+no/PasswordAuthentication yes/' "$conf"
+            echo -e "${C_YELLOW}[!] Corregido PasswordAuthentication en: $conf${C_RESET}"
+        fi
+        if grep -qE '^\s*PermitRootLogin\s+(no|prohibit-password|forced-commands-only)' "$conf"; then
+            sed -i 's/^\s*PermitRootLogin\s\+.*/PermitRootLogin yes/' "$conf"
+            echo -e "${C_YELLOW}[!] Corregido PermitRootLogin en: $conf${C_RESET}"
+        fi
+    done
 else
     sed -i 's/^\s*#\?\s*PermitRootLogin\s.*/PermitRootLogin yes/' "$SSHD_CONFIG"
     sed -i 's/^\s*#\?\s*PasswordAuthentication\s.*/PasswordAuthentication yes/' "$SSHD_CONFIG"
@@ -93,8 +108,7 @@ fi
 echo -e "${C_GREEN}✅ Validación OK.${C_RESET}\n"
 
 echo -e "${C_CYAN}[*] Estado actual:${C_RESET}"
-grep -E '^\s*(PermitRootLogin|PasswordAuthentication)' "$SSHD_CONFIG" 2>/dev/null
-[[ -f /etc/ssh/sshd_config.d/99-root-access.conf ]] && grep -E '^\s*(PermitRootLogin|PasswordAuthentication)' /etc/ssh/sshd_config.d/99-root-access.conf
+sshd -T 2>/dev/null | grep -iE "^\s*(permitrootlogin|passwordauthentication)"
 echo ""
 
 systemctl restart ssh 2>/dev/null || systemctl restart sshd
