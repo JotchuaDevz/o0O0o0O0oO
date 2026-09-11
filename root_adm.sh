@@ -49,9 +49,9 @@ while true; do
     break
 done
 
-echo "$PASS1:$PASS2" | passwd root >/dev/null 2>&1
-if [[ $? -ne 0 ]]; then
-    echo -e "${C_RED}[!] Error al establecer la contraseña de root.${C_RESET}"
+if ! echo "root:$PASS1" | chpasswd 2>/tmp/chpasswd.err; then
+    echo -e "${C_RED}[!] Error al establecer la contraseña de root:${C_RESET}"
+    cat /tmp/chpasswd.err
     exit 1
 fi
 unset PASS1 PASS2
